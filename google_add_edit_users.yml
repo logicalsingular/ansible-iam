@@ -1,0 +1,68 @@
+- name: Manage Google Workspace users
+  hosts: localhost
+  vars_files:
+    - example_vars/google.json
+  tasks:
+  - pip:
+      name:
+        - google-api-core==1.15.0
+        - google-api-python-client==1.8.4
+        - google-auth
+      extra_args: "--disable-pip-version-check --user"
+  - name: Manage users
+    gsuite_user:
+      google_private_key: '{{ google_private_key }}'
+      google_subject: '{{ google_subject }}'
+      email: '{{ item.general.email }}'
+      familyName: '{{ item.general.lastname }}'
+      givenName: '{{ item.general.firstname }}'
+      employeeId: '{{ item.general.uid }}'
+      password: '{{ item.gsuite.password | default("change.this.password.now!") }}'
+      changePasswordAtNextLogin: '{{ item.gsuite.changePasswordAtNextLogin | default(true) }}'
+      orgUnitPath: '{{ item.gsuite.orgUnitPath | default("/") }}'
+      aliases: '{{ item.gsuite.aliases }}'
+      groups: '{{ item.gsuite.groups }}'
+      suspended: false
+      transferUserEmail: '{{ item.gsuite.transferUserEmail | default("") }}'
+      state: '{{ item.gsuite.state | default("present") }}'
+    loop: "{{ user_details }}"
+    register: gsuite_user_output
+
+  - name: Debug gsuit
+    debug:
+      var: gsuite_user_output.json
+
+  - name: Save gsuite_user_output to a file
+    copy:
+      content: "{{ gsuite_user_output.json | to_nice_json }}"
+      dest: "/tmp/gsuite_user_output.json"
+
+  - name: Get OAuth token using subject and private key
+    get_oauth_token:
+      google_private_key: '{{ google_private_key }}'
+      google_subject: '{{ google_subject }}'
+      scopes:
+        - "https://www.googleapis.com/auth/apps.licensing"
+    register: access_token
+
+  - name: Assign licenses
+    uri:
+      url: "POST https://licensing.googleapis.com/apps/licensing/v1/product/{{ productId }}/sku/{{ skuId }}/user"
+      method: POST
+      headers:
+          Authorization: "Bearer {{ access_token.token }}"
+          Accept: "application/json"
+      body:
+        userId: "{{ item.general.uid }}"
+      body_format: json
+      return_content: yes
+    register: assign-licenses-response
+
+  - name: Debug response
+    debug:
+      var: assign-licenses-response.json
+
+  - name: Save assign-licenses-response to a file
+    copy:
+      content: "{{ assign-licenses-response.json | to_nice_json }}"
+      dest: "/tmp/assign-licenses-response.json"
