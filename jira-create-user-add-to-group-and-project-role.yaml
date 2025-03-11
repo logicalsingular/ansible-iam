@@ -1,0 +1,85 @@
+- name: Create a Jira user via API and add to existing Group
+  hosts: localhost
+  gather_facts: no
+  vars_files:
+    - example_vars/jira.json
+  tasks:
+    - name: Create a Jira user via API
+      uri:
+        url: "https://{{ jira_domain }}/rest/api/3/user"
+        method: POST
+        user: "{{ jira_email }}"
+        password: "{{ jira_api_token }}"
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body:
+          emailAddress: "{{ jira_user_email }}"
+        body_format: json
+        return_content: yes
+      register: response0
+
+    - name: Show response0
+      debug:
+        var: response0.json
+
+    - name: Save response0 to a file
+      copy:
+        content: "{{ response0.json | to_nice_json }}"
+        dest: "/tmp/response0.json"
+
+    - name: Extract and display Jira Account ID via API
+      set_fact:
+        jira_account_id: "{{ response0.json.accountId }}"
+
+    - name: Display Jira Account ID
+      debug:
+        msg: "Jira Account ID is {{ jira_account_id }}"
+
+    - name: Add a Jira User to Group via API
+      uri:
+        url: "https://{{ jira_domain }}/rest/api/3/group/user?groupId={{ jira_group_id }}"
+        method: POST
+        user: "{{ jira_email }}"
+        password: "{{ jira_api_token }}"
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body:
+          accountId: "{{ jira_account_id }}"
+        body_format: json
+        return_content: yes
+      register: response1
+
+    - name: Show response
+      debug:
+        var: response1.json
+    
+    - name: Save response1 to a file
+      copy:
+        content: "{{ response1.json | to_nice_json }}"
+        dest: "/tmp/response1.json"
+
+    - name: Add a Jira User to Project Role via API
+      uri:
+        url: "https://{{ jira_domain }}/rest/api/3/project/{{ projectIdOrKey }}/role/{{ role_id }}"
+        method: POST
+        user: "{{ jira_email }}"
+        password: "{{ jira_api_token }}"
+        headers:
+          Accept: "application/json"
+          Content-Type: "application/json"
+        body:
+          accountId: "{{ jira_account_id }}"
+        body_format: json
+        return_content: yes
+      register: response2
+
+    - name: Show response
+      debug:
+        var: response2.json
+
+    - name: Save response2 to a file
+      copy:
+        content: "{{ response2.json | to_nice_json }}"
+        dest: "/tmp/response2.json"
